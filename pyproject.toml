@@ -1,0 +1,40 @@
+[project]
+name = "synthetic-test"
+version = "0.1.0"
+description = "Synthetic experiment harness for reconciliation research — when does angular combining win?"
+requires-python = "==3.13.*"
+dependencies = [
+    "numpy>=2.1",
+    "scipy>=1.14",
+    "pandas>=2.2",
+    "matplotlib>=3.9",
+    "windpower-forecasting",
+]
+
+[tool.uv.sources]
+windpower-forecasting = { path = "../windpower_forecasting", editable = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/synthetic_test"]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8",
+    "ipykernel",
+]
+# Mirror the overrides windpower_forecasting uses: uni2ts (Moirai) and a few
+# others declare pins that conflict with our newer stack but work fine in
+# practice. See windpower_forecasting/pyproject.toml for the origin note.
+override-dependencies = [
+    "numpy>=2.1",
+    "scipy>=1.14",
+    "gluonts>=0.16",
+    "torch>=2.5",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
