@@ -68,6 +68,30 @@ def default_presets(
     }
 
 
+def presets_with_per_node_angular(
+    quantile_levels: np.ndarray | None = None,
+    mc_samples: int = 500,
+) -> dict[str, ReconciliationConfig]:
+    """Same as :func:`default_presets` plus a per-bottom-node ``angular`` config.
+
+    Adds one entry keyed ``"angular"`` — combines with a distinct θ_i per
+    bottom node (``num_low`` parameters). Used by the θ-vs-horizon
+    hypothesis test.
+    """
+    presets = default_presets(quantile_levels=quantile_levels, mc_samples=mc_samples)
+    common = dict(
+        projection_structure="pcv",
+        base_arrangement="ranked",
+        post_dependence="ranked",
+        n_samples=presets["weighted"].n_samples,
+        mc_samples=mc_samples,
+        q_start=presets["weighted"].q_start,
+        q_end=presets["weighted"].q_end,
+    )
+    presets["angular"] = ReconciliationConfig(combining_method="angular", **common)
+    return presets
+
+
 def split_scenario(scenario: Scenario, val_fraction: float) -> tuple[ReconciliationData, ReconciliationData]:
     """Split a scenario time-wise into (val, test) ReconciliationData."""
     T = scenario.data.forecast.shape[0]
@@ -93,12 +117,17 @@ class PresetResult:
         per_time_per_node_crps: Shape ``(T_test, N)``. Used for DM tests
             and for scenario-level aggregation.
         per_node_mean_crps: Shape ``(N,)``, ``= per_time_per_node_crps.mean(0)``.
+        fitted_theta_deg: For angular / shared_angular / linear_pool
+            combines, the fitted per-bottom-node angle in degrees, shape
+            ``(num_low,)``. ``None`` for combines that carry no angle
+            (weighted, mint_*, bottomup, topdown).
         succeeded: False if the fit or reconcile raised; arrays are then NaN.
         error: String rendering of the exception, if any.
     """
 
     per_time_per_node_crps: np.ndarray
     per_node_mean_crps: np.ndarray
+    fitted_theta_deg: np.ndarray | None = None
     succeeded: bool = True
     error: str = ""
 
@@ -134,9 +163,13 @@ def evaluate_preset(
             per_tn[:, n] = crps_quantile(
                 q_val, coherent[:, n, :], test_data.observed[:, n], reduction="obs",
             )
+        theta = getattr(model.combine, "angle", None)
+        if theta is not None:
+            theta = np.asarray(theta, dtype=float).reshape(-1)
         return PresetResult(
             per_time_per_node_crps=per_tn,
             per_node_mean_crps=per_tn.mean(axis=0),
+            fitted_theta_deg=theta,
         )
     except Exception as e:  # noqa: BLE001
         nan_tn = np.full((T_test, N), np.nan, dtype=float)

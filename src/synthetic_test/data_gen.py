@@ -49,6 +49,7 @@ def seasonal_truth(
     noise_std: float = 0.5,
     non_negative: bool = False,
     per_node_offset_scale: float = 0.5,
+    noise_ramp: float = 0.0,
 ) -> TruthFn:
     """Return a ``TruthFn`` producing a seasonal + noise ground truth series.
 
@@ -56,18 +57,29 @@ def seasonal_truth(
         period: Cycle length in units of ``t`` steps.
         amplitude: Sine amplitude of the seasonal component.
         baseline: Mean level.
-        noise_std: Std of the per-cell Gaussian noise.
+        noise_std: Base std of the per-cell Gaussian noise at bottom-index 0.
         non_negative: If True, clip the output to ``max(0, ·)``.
         per_node_offset_scale: Std of a fixed per-bottom-node offset,
             giving different bottom cells slightly different means.
+        noise_ramp: Multiplier controlling how the per-cell std grows with
+            bottom-index (proxy for horizon in a temporal hierarchy).
+            Effective std at bottom node ``i`` is
+            ``noise_std * (1 + noise_ramp * i / (m - 1))``. Zero (default)
+            reproduces the flat-difficulty baseline; positive values mimic
+            "far horizon is harder to predict" behaviour.
     """
 
     def _fn(hierarchy: TemporalHierarchy, T: int, rng: np.random.Generator) -> np.ndarray:
         m = hierarchy.num_low
-        t = np.arange(T)[:, None]  # (T, 1)
-        offsets = rng.normal(scale=per_node_offset_scale, size=(1, m))  # (1, m)
+        t = np.arange(T)[:, None]
+        offsets = rng.normal(scale=per_node_offset_scale, size=(1, m))
         y = baseline + offsets + amplitude * np.sin(2 * np.pi * t / period)
-        y = y + rng.normal(scale=noise_std, size=(T, m))
+        if noise_ramp != 0.0 and m > 1:
+            i_frac = np.arange(m) / (m - 1)
+            per_node_std = noise_std * (1.0 + noise_ramp * i_frac)
+        else:
+            per_node_std = np.full(m, noise_std)
+        y = y + rng.normal(size=(T, m)) * per_node_std[None, :]
         if non_negative:
             y = np.maximum(y, 0.0)
         return y

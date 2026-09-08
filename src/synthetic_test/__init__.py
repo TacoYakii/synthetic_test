@@ -10,14 +10,26 @@ ratio), sweeps reconciliation presets from the sibling
 wins. It does **not** implement or customize reconciliation itself.
 """
 
-from synthetic_test import characteristics, data_gen, families, hierarchy, mixture, plots, sweep
+from synthetic_test import (
+    calibration,
+    characteristics,
+    data_gen,
+    families,
+    hierarchy,
+    mixture,
+    plots,
+    stats,
+    sweep,
+)
 
 __all__ = [
+    "calibration",
     "characteristics",
     "data_gen",
     "families",
     "hierarchy",
     "mixture",
     "plots",
+    "stats",
     "sweep",
 ]
